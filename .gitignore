@@ -1,10 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
-.env
-.env.*
-report.json
-report.html
-benchmark.json
-benchmark.html
-*.jsonl
+venv/
+.idea/
+.vscode/
