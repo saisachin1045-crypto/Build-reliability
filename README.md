@@ -155,3 +155,7 @@ The funnel is not there to save pennies on a small model. A small model over eve
 - One change point per incident, and only increases. Slices can be confounded when few failures were sampled.
 - PII handling is two regexes. Do not treat it as a redaction guarantee.
 - Stage 5, the frontier root-cause agent and embedding clustering are described in [ANSWER.md](ANSWER.md), not implemented.
+
+## Integrated extension
+
+See [UPGRADE.md](UPGRADE.md) for the key-free demo and optional local/cloud model adapter connected to the original funnel. The original documentation above describes the baseline; new capabilities and limitations are documented separately.

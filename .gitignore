@@ -4,3 +4,12 @@ __pycache__/
 venv/
 .idea/
 .vscode/
+
+.env
+.env.*
+report.json
+report.html
+benchmark.json
+benchmark.html
+integrated-report.json
+integrated-report.html
