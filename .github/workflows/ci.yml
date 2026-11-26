@@ -1,0 +1,31 @@
+name: Reliability checks
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest -v
+      - run: python reliability.py --n 1000 --replay-demo
+      - run: python reliability.py --n 1000000 --out benchmark.json --html benchmark.html
+      - run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('benchmark.json'))
+          assert r['traces']==1000000
+          assert r['counts']['unverified']==800000
+          assert len(r['incidents'])==4
+          assert all(i['count']==50000 for i in r['incidents'])
+          assert r['usage']['calls']==0
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reliability-benchmark
+          path: |
+            benchmark.json
+            benchmark.html
+            report.json
+            report.html
