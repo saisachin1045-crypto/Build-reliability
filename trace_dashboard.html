@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent trace reliability</title>
+<style>
+:root{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#1d3438;background:#f4f7f6;color-scheme:light}
+*{box-sizing:border-box}body{margin:0}header{background:#16353a;color:#fff;padding:30px max(20px,calc((100% - 1040px)/2))}
+main{max-width:1080px;margin:auto;padding:22px 20px 40px}h1,h2,p{margin:0}h1{font-size:clamp(1.8rem,4.5vw,2.8rem);letter-spacing:-.055em}
+header p{color:#cee4df;line-height:1.5;margin-top:5px}h2{font-size:1.25rem;line-height:1.4}
+.panel, .stat{background:#fff;border:1px solid #c8d9d5;border-radius:9px}.panel{padding:20px;margin-bottom:16px}
+.actions,.toolbar,.metrics{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.actions{margin:15px 0 10px}button,input{font:inherit}button{padding:9px 13px;border-radius:5px;border:1px solid #638580;background:#fff;color:#184b45;cursor:pointer}
+.primary{background:#10695e;color:white;border-color:#10695e}button:disabled{opacity:.6;cursor:wait}button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #007caf;outline-offset:2px}
+a{color:#145f56}.hint,#status{font-size:.92rem;color:#496165;line-height:1.5}#status{margin-top:8px}.error{color:#a53722!important}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px}.stat{padding:17px}.stat span{display:block;color:#496165;font-size:.87rem}.stat strong{display:block;font-size:clamp(1.5rem,3vw,2.1rem);margin-top:6px;letter-spacing:-.05em}
+.toolbar{justify-content:space-between}.toolbar input{border:1px solid #b1c8c3;border-radius:5px;padding:8px;width:min(260px,100%)}
+details{border-top:1px solid #d6e2df;margin-top:9px;padding:10px 0 3px}summary{cursor:pointer;color:#174e47;font-weight:650}details p{line-height:1.55;margin:7px 0}pre{background:#eff5f2;padding:10px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+#empty{padding-top:14px;color:#496165}.row{display:grid;grid-template-columns:140px 1fr;gap:10px}.label{color:#496165;font-weight:600}#export{margin-top:14px}
+@media(max-width:630px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.row{grid-template-columns:1fr;gap:0}main{padding:15px}.panel,.stat{padding:14px}}
+</style>
+</head>
+<body>
+<header><h1>Agent trace reliability</h1><p>Inspect recurring failures and the traces behind them.</p></header>
+<main>
+<section class="panel"><h2>Analyze traces</h2><div class="actions"><button type="button" id="open" class="primary">Open JSONL file</button><input type="file" id="file" accept=".jsonl,.ndjson" hidden><button type="button" id="demo">Load sample report</button><a href="/sample.jsonl" download>Download sample traces</a></div>
+<p class="hint">Uploads run on your local Python server. Up to 256 MiB per file. The dashboard uses zero model calls.</p>
+<p id="status" role="status" aria-live="polite"></p></section>
+<div id="results" hidden>
+<div class="metrics"><div class="stat"><span>Traces analyzed</span><strong id="total"></strong></div><div class="stat"><span>Flagged</span><strong id="flagged"></strong></div><div class="stat"><span>Unverified</span><strong id="unverified"></strong></div><div class="stat"><span>Model calls</span><strong id="calls"></strong></div></div>
+<section class="panel"><div class="toolbar"><h2>Failure groups</h2><input type="search" id="filter" aria-label="Filter failure groups" placeholder="Filter failure groups"></div>
+<div id="groups"></div><p id="empty" hidden>No matching failure groups.</p><button type="button" id="export">Download JSON report</button></section></div>
+</main>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+const number=new Intl.NumberFormat();
+let current=null;
+function node(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;}
+function row(label,value){const r=node('p',undefined,'row');r.append(node('span',label,'label'),node('span',value));return r;}
+function draw(){
+  const container=el('groups'),query=el('filter').value.toLowerCase().trim();container.replaceChildren();
+  for(const group of current.incidents){
+    const title=group.failure_class.replaceAll('_',' ');
+    if(!(title+' '+group.hypothesis).toLowerCase().includes(query))continue;
+    const d=node('details');d.append(node('summary',title+' · '+number.format(group.count)));
+    d.append(row('Suggested check',group.hypothesis),row('Cause status',group.causality));
+    const idx=group.example.first_bad_span;
+    d.append(row('First flagged span',idx===null?'Answer-level signal':'spans['+idx+']'));
+    const rates=Object.entries(group.deployment_rates).map(([name,v])=>name+' '+(100*v).toFixed(1)+'%').join(', ');
+    d.append(row('Rate by deploy',rates),node('pre',JSON.stringify(group.example.trace,null,2)));container.append(d);
+  }
+  el('empty').hidden=container.childElementCount>0;
+}
+async function run(file){
+  const name=file?file.name:'1,000 synthetic traces';
+  el('status').className='';el('status').textContent='Analyzing '+name+'…';el('open').disabled=el('demo').disabled=true;
+  try{
+    const response=file?await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/x-ndjson'},body:file}):await fetch('/api/sample');
+    const data=await response.json();if(!response.ok)throw Error(data.error||'Analysis failed.');
+    current=data;const clean=data.counts.unverified||0;
+    for(const [id,value] of Object.entries({total:data.traces,flagged:data.traces-clean,unverified:clean,calls:data.usage.calls}))el(id).textContent=number.format(value);
+    el('filter').value='';draw();el('results').hidden=false;el('status').textContent=name+' · '+data.elapsed_seconds+' s analysis.';
+  }catch(error){el('status').className='error';el('status').textContent=error.message+(current?' The previous report is still displayed.':'');}
+  finally{el('open').disabled=el('demo').disabled=false;el('file').value='';}
+}
+el('open').onclick=()=>el('file').click();el('file').onchange=()=>{const f=el('file').files[0];if(f)run(f);};
+el('demo').onclick=()=>run(null);el('filter').oninput=()=>{if(current)draw();};
+el('export').onclick=()=>{if(!current)return;const url=URL.createObjectURL(new Blob([JSON.stringify(current,null,2)],{type:'application/json'}));const a=node('a');a.href=url;a.download='trace-report.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+run(null);
+</script></body></html>

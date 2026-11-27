@@ -1,5 +1,23 @@
 # agent-trace-triage
 
+## Try the Neatlogs challenge demo
+
+From the cloned repository, run the command below with Python 3.10 or newer. Open `http://127.0.0.1:8000/` on the same computer. The dashboard starts with 1,000 synthetic traces and accepts your own JSONL file. Select a failure group to inspect its representative spans, deployment rates and suggested follow-up. The upload path uses the local rules and requires no accounts or dependencies.
+
+```sh
+python trace_dashboard.py
+```
+
+Use **Download sample traces** for a working input file. Each line needs a `trace_id` and a `user_goal` or `final_answer`. The `spans` array and `attrs` object hold execution evidence. The dashboard accepts files up to 256 MiB. For larger files, use `python reliability.py --input traces.jsonl`.
+
+The public streaming benchmark processed **one million synthetic traces**. Four seeded failure classes each affected **50,000** traces, and **800,000** had no detected signal. The run made **zero model requests**. [Benchmark results and reproduction command](BENCHMARK.md)
+
+The integrated pipeline supports a key-free demo, local Ollama, and optional OpenAI or Claude review. The published tests exercise provider adapters with fixture responses. [Model setup and replay](UPGRADE.md)
+
+## Original synthetic evaluation
+
+The following sections describe the simulated-judge experiment included in this repository.
+
 A small, runnable answer to one question:
 
 > Say you have a million agent traces. How would you figure out what's failing and why, at the lowest possible cost?
